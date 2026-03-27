@@ -14,8 +14,11 @@ const curatedHairstyles = {
         { name: "Buzz Cut", url: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d" },
         { name: "Side Part", url: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e" },
         { name: "Curly Top Fade", url: "https://images.unsplash.com/photo-1531384441138-2736e62e0919" },
-        { name: "Executive Contour", url: "https://images.unsplash.com/photo-1618077360395-f3068be8e001" },
-        { name: "Messy Fringe", url: "https://images.unsplash.com/photo-1567894340348-70191b451a5d" }
+        { name: "Executive Contour", url: "https://images.unsplash.com/photo-1621605815971-fbc98d665033" },
+        { name: "Messy Fringe", url: "https://images.unsplash.com/photo-1622286342621-4bd786c2447c" },
+        { name: "Mullet Modern", url: "https://images.unsplash.com/photo-1605497788044-5a32c7078486" },
+        { name: "Man Bun", url: "https://images.unsplash.com/photo-1519345182560-3f2917c472ef" },
+        { name: "Top Knot", url: "https://images.unsplash.com/photo-1492106087820-71f1a00d2b11" }
     ],
     female: [
         { name: "Layered Long Waves", url: "https://images.unsplash.com/photo-1563721517731-7079b3a4d485" },
@@ -25,8 +28,10 @@ const curatedHairstyles = {
         { name: "Balayage Curls", url: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61" },
         { name: "Braided Crown", url: "https://images.unsplash.com/photo-1494790108377-be9c29b29330" },
         { name: "Straight Sleek", url: "https://images.unsplash.com/photo-1519699047748-de8e457a634e" },
-        { name: "Curtain Bangs", url: "https://images.unsplash.com/photo-1493106819501-66d381c446a5" },
-        { name: "Voluminous Curls", url: "https://images.unsplash.com/photo-1534528741775-53994a69daeb" }
+        { name: "Curtain Bangs", url: "https://images.unsplash.com/photo-1605980776115-46f9066bf9eb" },
+        { name: "Voluminous Curls", url: "https://images.unsplash.com/photo-1580618672591-eb180b1a973f" },
+        { name: "Space Bun", url: "https://images.unsplash.com/photo-1595152772835-219674b2a8a6" },
+        { name: "French Braid", url: "https://images.unsplash.com/photo-1541534401786-2077ee40cdce" }
     ]
 };
 

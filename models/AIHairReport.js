@@ -26,6 +26,10 @@ const AIHairReportSchema = new mongoose.Schema({
     transformedImageURL: {
         type: String
     },
+    hairstyleImages: [{
+        name: String,
+        imageData: String
+    }],
     fallbackImages: [{
         name: String,
         url: String

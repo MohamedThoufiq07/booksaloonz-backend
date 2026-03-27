@@ -135,9 +135,15 @@ exports.getMyBookings = asyncHandler(async (req, res) => {
 // @route   GET /api/bookings/salon/:salonId
 // @access  Private (salonOwner)
 exports.getSalonBookings = asyncHandler(async (req, res) => {
+    // SECURITY: Ensure the requester OWNS the salon they are querying (Prevent IDOR)
+    const salon = await Salon.findById(req.params.salonId).select('owner').lean();
+    if (!salon || salon.owner.toString() !== req.user.id) {
+        return res.status(403).json({ success: false, message: 'Not authorized to view bookings for this salon' });
+    }
+
     const bookings = await Booking.find({ salon: req.params.salonId })
-        .populate('user', 'name email')
-        .sort({ createdAt: -1 })
+        .populate('user', 'name email phone')
+        .sort({ date: -1, time: -1 })
         .lean();
 
     res.json({ success: true, count: bookings.length, bookings });

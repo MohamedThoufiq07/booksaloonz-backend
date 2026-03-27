@@ -1,65 +1,42 @@
 const Salon = require('../models/Salon');
 const searchAlgorithm = require('../algorithms/searchAlgorithm');
 const ltrRanking = require('../algorithms/ltrRanking');
+const asyncHandler = require('../utils/asyncHandler');
 
 // @desc Get All Salons (with Ranking)
-exports.getSalons = async (req, res) => {
-    try {
-        let salons = await Salon.find().lean();
-        salons = ltrRanking(salons); // Apply LTR logic
-        res.json({
-            success: true,
-            data: salons
-        });
-    } catch (err) {
-        console.error("Get Salons Error:", err.message);
-        res.status(500).json({
-            success: false,
-            message: 'Server Error'
-        });
-    }
-};
+exports.getSalons = asyncHandler(async (req, res) => {
+    let salons = await Salon.find().lean();
+    salons = ltrRanking(salons); // Apply LTR logic
+    res.json({
+        success: true,
+        data: salons
+    });
+});
 
 // @desc Search Salons
-exports.searchSalons = async (req, res) => {
-    try {
-        const { query } = req.query;
-        let salons = await Salon.find().lean();
-        // searchAlgorithm now includes BERT search + LTR ranking in one pipeline
-        salons = searchAlgorithm(salons, query);
-        res.json({
-            success: true,
-            data: salons
-        });
-    } catch (err) {
-        console.error("Search Salons Error:", err.message);
-        res.status(500).json({
-            success: false,
-            message: 'Server Error'
-        });
-    }
-};
+exports.searchSalons = asyncHandler(async (req, res) => {
+    const { query } = req.query;
+    let salons = await Salon.find().lean();
+    // searchAlgorithm now includes BERT search + LTR ranking in one pipeline
+    salons = searchAlgorithm(salons, query);
+    res.json({
+        success: true,
+        data: salons
+    });
+});
 
 // @desc Add Salon (Owner only)
-exports.addSalon = async (req, res) => {
-    try {
-        const { name, address, rating, img, startingPrice } = req.body;
-        const newSalon = new Salon({
-            name, address, rating, img, startingPrice, owner: req.user.id
-        });
-        await newSalon.save();
-        res.json({
-            success: true,
-            data: newSalon
-        });
-    } catch (err) {
-        console.error("Add Salon Error:", err.message);
-        res.status(500).json({
-            success: false,
-            message: 'Server Error'
-        });
-    }
-};
+exports.addSalon = asyncHandler(async (req, res) => {
+    const { name, address, rating, img, startingPrice } = req.body;
+    const newSalon = new Salon({
+        name, address, rating, img, startingPrice, owner: req.user.id
+    });
+    await newSalon.save();
+    res.json({
+        success: true,
+        data: newSalon
+    });
+});
 
 // @desc Get Salon by ID
 exports.getSalonById = async (req, res) => {
@@ -160,18 +137,13 @@ exports.getSalonsByProduct = async (req, res) => {
 
 // @desc Get My Salon (Owner only)
 // @route GET /api/salons/my/profile
-exports.getMySalon = async (req, res) => {
-    try {
-        const salon = await Salon.findOne({ owner: req.user.id });
-        if (!salon) {
-            return res.status(404).json({ success: false, message: 'You do not have a salon registered yet' });
-        }
-        res.json({
-            success: true,
-            data: salon
-        });
-    } catch (err) {
-        console.error("Get My Salon Error:", err.message);
-        res.status(500).json({ success: false, message: 'Server Error' });
+exports.getMySalon = asyncHandler(async (req, res) => {
+    const salon = await Salon.findOne({ owner: req.user.id });
+    if (!salon) {
+        return res.status(404).json({ success: false, message: 'You do not have a salon registered yet' });
     }
-};
+    res.json({
+        success: true,
+        data: salon
+    });
+});

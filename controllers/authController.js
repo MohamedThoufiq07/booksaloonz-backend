@@ -5,13 +5,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const asyncHandler = require('../utils/asyncHandler');
 const { sendWelcomeEmail } = require('../services/emailService');
-
-// Helper to generate JWTs
-const generateTokens = (id, role) => {
-    const accessToken = jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn: '1d' });
-    const refreshToken = jwt.sign({ id, role }, process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret', { expiresIn: '7d' });
-    return { accessToken, refreshToken };
-};
+const { generateTokens } = require('../utils/tokenUtils');
 
 // @desc    Register User
 // @route   POST /api/auth/user/signup
@@ -19,10 +13,11 @@ exports.registerUser = asyncHandler(async (req, res) => {
     const { name, email, password, phone } = req.body;
 
     const emailLower = email.toLowerCase().trim();
-    let user = await User.findOne({ email: emailLower });
+    const existingUser = await User.findOne({ email: emailLower });
+    const existingOwner = await SalonOwner.findOne({ email: emailLower });
 
-    if (user) {
-        return res.status(400).json({ success: false, message: "User already exists" });
+    if (existingUser || existingOwner) {
+        return res.status(400).json({ success: false, message: "Email already exists in our system." });
     }
 
     user = new User({ name, email: emailLower, password, phone });
@@ -51,17 +46,12 @@ exports.loginUser = asyncHandler(async (req, res) => {
     const { email, password } = req.body;
     const user = await User.findOne({ email: email.toLowerCase() });
 
-    if (!user) {
-        return res.status(400).json({ success: false, message: "Account not found. Please create an account." });
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+        return res.status(401).json({ success: false, message: "Invalid email or password" });
     }
 
     if (user.isBlocked) {
         return res.status(403).json({ success: false, message: "Your account has been blocked. Contact support." });
-    }
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-        return res.status(400).json({ success: false, message: "Wrong password" });
     }
 
     const { accessToken, refreshToken } = generateTokens(user._id, user.role);
@@ -82,17 +72,12 @@ exports.loginOwner = asyncHandler(async (req, res) => {
     const { email, password } = req.body;
     const owner = await SalonOwner.findOne({ email: email.toLowerCase() });
 
-    if (!owner) {
-        return res.status(400).json({ success: false, message: "Account not found. Please create an account." });
+    if (!owner || !(await bcrypt.compare(password, owner.password))) {
+        return res.status(401).json({ success: false, message: "Invalid email or password" });
     }
 
     if (owner.isBlocked) {
         return res.status(403).json({ success: false, message: "Your account has been blocked. Contact support." });
-    }
-
-    const isMatch = await bcrypt.compare(password, owner.password);
-    if (!isMatch) {
-        return res.status(400).json({ success: false, message: "Wrong password" });
     }
 
     const { accessToken, refreshToken } = generateTokens(owner._id, owner.role);
@@ -113,9 +98,10 @@ exports.registerOwner = asyncHandler(async (req, res) => {
     const { ownerName, email, password, salonName, address, salonPhoto, startingPrice, phone } = req.body;
 
     const emailLower = email.toLowerCase().trim();
-    let owner = await SalonOwner.findOne({ email: emailLower });
-    if (owner) {
-        return res.status(400).json({ success: false, message: "Partner already exists" });
+    const existingUser = await User.findOne({ email: emailLower });
+    const existingOwner = await SalonOwner.findOne({ email: emailLower });
+    if (existingUser || existingOwner) {
+        return res.status(400).json({ success: false, message: "Partner email already exists" });
     }
 
     owner = new SalonOwner({ ownerName, email: emailLower, password, salonName, phone });
@@ -156,7 +142,8 @@ exports.refreshToken = asyncHandler(async (req, res) => {
 
     let decoded;
     try {
-        decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret');
+        if (!process.env.JWT_REFRESH_SECRET) throw new Error('JWT_REFRESH_SECRET missing');
+        decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
     } catch (err) {
         return res.status(401).json({ success: false, message: 'Invalid refresh token' });
     }
@@ -235,14 +222,17 @@ exports.updateProfile = asyncHandler(async (req, res) => {
     let user;
     if (req.user.role === 'salonOwner') {
         user = await SalonOwner.findById(req.user.id);
-        if (name) user.ownerName = name;
     } else {
         user = await User.findById(req.user.id);
-        if (name) user.name = name;
     }
 
     if (!user) {
         return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if (name) {
+        if (req.user.role === 'salonOwner') user.ownerName = name;
+        else user.name = name;
     }
 
     if (email) {

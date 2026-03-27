@@ -1,15 +1,12 @@
 const AIHairReport = require('../models/AIHairReport');
 const { detectGenderAndFeatures, generateHairstyleGrid } = require('../services/geminiService');
-const { searchHairstyles } = require('../services/searchService');
-const { analyzeface } = require('../services/faceAnalysisService');
 
 /**
  * POST /api/ai/analyze
  * STRICT PROCESS:
  * 1. Analyze face to detect gender, shape, density, and texture
- * 2. Apply gender-specific prompt to Gemini Pro to generate 3x3 grid
- * 3. IF Gemini fails, trigger SEARCH FALLBACK (Unsplash / Web)
- * 4. Return results (No fallbacks allowed)
+ * 2. Generate a 3x3 grid of hairstyles using Gemini AI (user's own face)
+ * 3. NO stock photo fallback
  */
 exports.analyzeFaceAndHair = async (req, res) => {
     try {
@@ -17,7 +14,6 @@ exports.analyzeFaceAndHair = async (req, res) => {
             return res.status(400).json({ success: false, message: 'No image uploaded' });
         }
 
-        // Check if Gemini API Key is available
         if (!process.env.GEMINI_API_KEY) {
             return res.status(503).json({
                 success: false,
@@ -30,85 +26,34 @@ exports.analyzeFaceAndHair = async (req, res) => {
             imageURL: `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`,
         };
 
-        // INNER TRY for AI Business Logic (422 status)
         try {
-            let analysis;
-            try {
-                // STEP 1: Detect Gender and analyze face features
-                console.log("Step 1: Analyzing gender and face features...");
-                analysis = await detectGenderAndFeatures(req.file.buffer, req.file.mimetype);
-            } catch (initialError) {
-                console.error("Initial Gemini analysis failed:", initialError.message);
+            // STEP 1: Detect Gender and analyze face features
+            console.log("Step 1: Analyzing gender and face features...");
+            const analysis = await detectGenderAndFeatures(req.file.buffer, req.file.mimetype);
 
-                // FALLBACK: Use local Face-API for face shape if Gemini is busy
-                if (initialError.message.includes("busy") || initialError.message.includes("loaded") || initialError.message.includes("429") || initialError.message.includes("timeout")) {
-                    console.log("Triggering local fallback for face analysis...");
-                    const localResult = await analyzeface(req.file.buffer);
-                    if (localResult && localResult.success) {
-                        analysis = {
-                            gender: 'Unknown',
-                            faceShape: localResult.faceShape,
-                            hairDensity: 'Undetected',
-                            hairTexture: 'Undetected',
-                            reason: 'High-precision AI busy. Used local shape detection.',
-                            fromFallback: true
-                        };
-                    } else {
-                        throw initialError;
-                    }
-                } else {
-                    throw initialError;
-                }
-            }
-
-            reportData.faceShape = analysis.faceShape;
-            reportData.gender = analysis.gender;
-            reportData.hairDensity = analysis.hairDensity;
-            reportData.hairTexture = analysis.hairTexture;
+            reportData.faceShape = analysis.faceShape || "Oval";
+            reportData.gender = analysis.gender || "male";
+            reportData.hairDensity = analysis.hairDensity || "Medium";
+            reportData.hairTexture = analysis.hairTexture || "Straight";
             reportData.explanation = analysis.reason;
-            reportData.confidence = analysis.fromFallback ? 70 : 98;
+            reportData.confidence = 98;
 
-            // STEP 2 & 3: Generate the Hairstyle Grid Image using Gemini
-            let gridResult = { success: false };
-            try {
-                console.log(`Step 2 & 3: Generating strict ${reportData.gender} hairstyle grid (Gemini Pro)...`);
-                gridResult = await generateHairstyleGrid(
-                    req.file.buffer,
-                    req.file.mimetype,
-                    reportData.gender
-                );
-            } catch (geminiError) {
-                console.error("Gemini Grid Generation Failed:", geminiError.message);
-            }
+            // STEP 2: Generate hairstyle grid using Gemini
+            console.log(`Step 2: Generating ${reportData.gender} hairstyle grid with user's face...`);
+            const gridResult = await generateHairstyleGrid(
+                req.file.buffer,
+                req.file.mimetype,
+                reportData.gender,
+                reportData.faceShape
+            );
 
-            // STEP 4 & 5: Gemini Failure Handling & Web Search Fallback
-            if (gridResult.success && gridResult.gridImageBase64 && gridResult.gridImageBase64.length > 500) {
+            if (gridResult.success && gridResult.gridImageBase64) {
                 reportData.transformedImageURL = gridResult.gridImageBase64;
                 reportData.fallbackSearchUsed = false;
             } else {
-                console.log("⚠️ Step 4: Gemini failed. Triggering Step 5: Web Search Fallback...");
-                const searchResults = await searchHairstyles(
-                    analysis.faceShape,
-                    analysis.hairDensity,
-                    analysis.hairTexture,
-                    analysis.gender
-                );
-
-                if (searchResults && searchResults.length > 0) {
-                    reportData.fallbackImages = searchResults;
-                    reportData.fallbackSearchUsed = true;
-                    // No single transformedImageURL in fallback mode
-                } else {
-                    throw new Error("No hairstyle suggestions found. Please upload a clearer photo.");
-                }
+                throw new Error(gridResult.message || "AI could not generate hairstyle grid. Please try again.");
             }
 
-            // Final safety check: If both failed, it's an error.
-            if (!reportData.transformedImageURL && (!reportData.fallbackImages || reportData.fallbackImages.length === 0)) {
-                throw new Error("No hairstyle suggestions found. Please upload a clearer photo.");
-            }
-
-            // Clear any static recommendations logic
             reportData.recommendations = [];
 
             // Save the report to DB
@@ -118,23 +63,23 @@ exports.analyzeFaceAndHair = async (req, res) => {
             res.status(200).json({
                 success: true,
                 report: newReport,
-                treatmentSuggestions: analysis.gender === 'male'
+                treatmentSuggestions: reportData.gender === 'male'
                     ? ["Use scalp revitalizing tonic", "Scalp massage twice a week"]
                     : ["Apply heat protectant", "Deep conditioning every 15 days"],
-                productRecommendations: analysis.gender === 'male'
+                productRecommendations: reportData.gender === 'male'
                     ? ["Caffeine Shampoo", "Matt Wax"]
                     : ["Argan Oil", "Volume Mousse"]
             });
 
-        } catch (analysisError) { // This catch handles errors that result in a 422 status
+        } catch (analysisError) {
             console.error("AI processing failed:", analysisError.message);
             res.status(422).json({
                 success: false,
-                message: analysisError.message || 'No hairstyle suggestions found. Please upload a clearer photo.'
+                message: analysisError.message || 'AI could not process the image. Please try again.'
             });
         }
 
-    } catch (error) { // This catch handles general server errors (500)
+    } catch (error) {
         console.error('AI Analysis Error:', error);
         res.status(500).json({ success: false, message: 'Internal server error during analysis' });
     }
