@@ -20,7 +20,7 @@ exports.registerUser = asyncHandler(async (req, res) => {
         return res.status(400).json({ success: false, message: "Email already exists in our system." });
     }
 
-    user = new User({ name, email: emailLower, password, phone });
+    const user = new User({ name, email: emailLower, password, phone });
 
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(password, salt);
@@ -104,7 +104,7 @@ exports.registerOwner = asyncHandler(async (req, res) => {
         return res.status(400).json({ success: false, message: "Partner email already exists" });
     }
 
-    owner = new SalonOwner({ ownerName, email: emailLower, password, salonName, phone });
+    const owner = new SalonOwner({ ownerName, email: emailLower, password, salonName, phone });
     const salt = await bcrypt.genSalt(10);
     owner.password = await bcrypt.hash(password, salt);
 
