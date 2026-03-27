@@ -28,6 +28,16 @@ exports.searchSalons = asyncHandler(async (req, res) => {
 // @desc Add Salon (Owner only)
 exports.addSalon = asyncHandler(async (req, res) => {
     const { name, address, rating, img, startingPrice } = req.body;
+    
+    // Duplicate Salon Check
+    const existingSalon = await Salon.findOne({ owner: req.user.id });
+    if (existingSalon) {
+        return res.status(400).json({
+            success: false,
+            message: "Salon already exists for this owner"
+        });
+    }
+
     const newSalon = new Salon({
         name, address, rating, img, startingPrice, owner: req.user.id
     });
