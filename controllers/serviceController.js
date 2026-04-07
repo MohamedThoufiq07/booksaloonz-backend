@@ -24,6 +24,13 @@ exports.getSalonServices = asyncHandler(async (req, res) => {
 exports.addService = asyncHandler(async (req, res) => {
     const { salonId, name, price, duration, category, description } = req.body;
 
+    if (duration > 30) {
+        return res.status(400).json({
+            success: false,
+            message: "Service duration cannot exceed 30 minutes"
+        });
+    }
+
     // Verify salon belongs to owner
     const salon = await Salon.findById(salonId);
     if (!salon) {
@@ -53,6 +60,13 @@ exports.addService = asyncHandler(async (req, res) => {
 // @route   PUT /api/services/:id
 // @access  Private (salonOwner)
 exports.updateService = asyncHandler(async (req, res) => {
+    if (req.body.duration && req.body.duration > 30) {
+        return res.status(400).json({
+            success: false,
+            message: "Service duration cannot exceed 30 minutes"
+        });
+    }
+
     let service = await Service.findById(req.params.id).populate('salon');
 
     if (!service) {

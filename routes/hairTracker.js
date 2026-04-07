@@ -16,74 +16,67 @@ const upload = multer({
 // Simple memory-based rate limit
 let lastRequestTime = 0;
 
-/**
- * POST /api/hairtracker/analyze-hair
- * Main endpoint for hair analysis and hairstyle generation
- */
 router.post("/analyze-hair", upload.single("image"), async (req, res) => {
     try {
-        // Rate limit — 10 second cooldown to prevent API spam
-        const now = Date.now();
-        if (now - lastRequestTime < 10000) {
-            return res.status(429).json({
-                success: false,
-                error: "Please wait at least 10 seconds between analysis requests."
-            });
-        }
-        lastRequestTime = now;
-
-        // Validation
         if (!req.file) {
             return res.status(400).json({
                 success: false,
-                error: "No image file provided. Please upload a clear portrait photo."
+                error: "No image file provided."
             });
         }
 
-        console.log(`\n--- New Analysis Request: ${req.file.originalname} ---`);
+        console.log(`\n--- New Analysis Request (Vision Analysis) ---`);
+        
+        // Analyze features directly from image buffer using Gemini Vision
+        const analysis = await detectGenderAndFeatures(req.file.buffer);
+        
+        if (!analysis.success) {
+            let errorMsg = "Analysis failed. Please try again with a clearer photo.";
+            if (analysis.error === "not_a_face") {
+                errorMsg = "Please upload a correct picture of a person's face. We couldn't detect a human face in your image.";
+            } else if (analysis.error === "vision_not_configured") {
+                errorMsg = "AI Vision is not fully configured (Missing Google Gemini Key). Please contact the developer.";
+            } else if (analysis.error === "analysis_error") {
+                errorMsg = "The AI encountered an error analyzing this specific image. Please try another photo.";
+            }
 
-        // Step 1: Detect features using Groq (llama3-70b-8192)
-        console.log("🔍 STEP 1: Detecting hair features...");
-        const features = await detectGenderAndFeatures(
-            req.file.buffer,
-            req.file.mimetype
-        );
-        console.log("✅ Features:", JSON.stringify(features, null, 2));
+            return res.status(400).json({
+                success: false,
+                error: errorMsg
+            });
+        }
 
-        // Step 2: Generate hairstyle choices using Hugging Face (SDXL)
-        console.log("🎨 STEP 2: Generating 9 hairstyle variants...");
-        const hairstyleResult = await generateHairstyleGrid(
-            req.file.buffer,
-            req.file.mimetype,
-            features.gender,
-            features.faceShape
-        );
-        console.log(`✅ Hairstyles Generated: ${hairstyleResult.success ? hairstyleResult.hairstyles.length : 0}`);
+        const features = {
+            gender: analysis.gender || req.body.gender || "male",
+            faceShape: analysis.faceShape || req.body.faceShape || "Oval",
+            hairType: analysis.hairType || req.body.hairType || "Wavy",
+            hairDensity: analysis.hairDensity || req.body.hairDensity || "Medium"
+        };
 
-        // Step 3: Get personalized hair care recommendations using Groq
-        console.log("💆 STEP 3: Fetching hair care routine...");
-        const hairCare = await getHairCareRecommendations(
-            features.gender,
-            features.faceShape,
-            features.hairTexture,
-            features.hairDensity
-        );
-        console.log("✅ Recommendations ready");
+        console.log("Features identified by AI:", features);
 
-        // Return final consolidated response
+        // Get hairstyle choices based on identified features
+        let hairstyles = await generateHairstyleGrid(features);
+
+        if (!hairstyles || hairstyles.length === 0) {
+            console.log("⚠️ Results empty after logic. Triggering emergency UI fallback...");
+            hairstyles = await getHairstyleSuggestions({ ...features, forceFallback: true });
+        }
+
+        console.log(`✅ ${hairstyles.length} hairstyles ready for display.`);
+
         res.json({
             success: true,
             features,
-            hairstyles: hairstyleResult.hairstyles || [],
-            hairCare
+            hairstyles: hairstyles || []
         });
 
     } catch (error) {
         console.error("❌ Fatal Route Error:", error.message);
         res.status(500).json({
             success: false,
-            error: "The hair analysis session failed to complete. Please try again later.",
-            details: error.message
+            error: "The hair analysis session failed. Using local style recommendations.",
+            hairstyles: [] // Frontend will handle empty or backend will have fallback
         });
     }
 });

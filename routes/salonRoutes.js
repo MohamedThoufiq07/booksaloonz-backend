@@ -64,6 +64,17 @@ router.get("/nearby", async (req, res) => {
             salons = await Salon.find().limit(20);
         }
 
+        // Repair coordinates for placeholders at Tirunelveli
+        salons = salons.map(salon => {
+            if (salon.location && salon.location.coordinates[0] === 0 && salon.location.coordinates[1] === 0) {
+                return {
+                    ...salon,
+                    location: { ...salon.location, coordinates: [77.7567, 8.7139] }
+                };
+            }
+            return salon;
+        });
+
         res.json({ success: true, salons });
 
     } catch (error) {

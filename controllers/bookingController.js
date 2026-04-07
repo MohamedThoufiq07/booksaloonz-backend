@@ -1,6 +1,7 @@
 const Booking = require('../models/Booking');
 const Salon = require('../models/Salon');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 const asyncHandler = require('../utils/asyncHandler');
 const { isSlotAvailable, getAvailableSlots } = require('../services/slotService');
 const { sendBookingConfirmation, sendCancellationEmail } = require('../services/emailService');
@@ -85,7 +86,7 @@ exports.createBooking = asyncHandler(async (req, res) => {
 
     // Send confirmation email (async, don't block response)
     const user = await User.findById(req.user.id).select('name email').lean();
-    const salon = await Salon.findById(salonId).select('name').lean();
+    const salon = await Salon.findById(salonId).select('name owner').lean();
 
     sendBookingConfirmation(user.email, {
         userName: user.name,
@@ -95,6 +96,20 @@ exports.createBooking = asyncHandler(async (req, res) => {
         time,
         price
     }).catch(() => { }); // fire-and-forget
+
+    // Create notification for the partner (fire-and-forget)
+    if (salon.owner) {
+        Notification.create({
+            partnerId: salon.owner,
+            userId: req.user.id,
+            bookingId: booking._id,
+            userName: user.name,
+            serviceName: service,
+            bookingTime: `${date} at ${time}`,
+            status: 'pending',
+            isRead: false
+        }).catch(() => { });
+    }
 
     res.status(201).json({
         success: true,

@@ -56,6 +56,7 @@ app.use('/api/payments', require('./routes/paymentRoutes'));
 app.use('/api/orders', require('./routes/orderRoutes'));
 app.use('/api/hairstyle', require('./routes/hairStyleRoutes'));
 app.use('/api/ai', require('./routes/aiRoutes'));
+app.use('/api/notifications', require('./routes/notificationRoutes'));
 const hairTrackerRoute = require("./routes/hairTracker");
 app.use("/api/hairtracker", hairTrackerRoute);
 

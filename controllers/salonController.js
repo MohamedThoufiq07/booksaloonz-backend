@@ -6,6 +6,21 @@ const asyncHandler = require('../utils/asyncHandler');
 // @desc Get All Salons (with Ranking)
 exports.getSalons = asyncHandler(async (req, res) => {
     let salons = await Salon.find().lean();
+    
+    // Repair coordinates for mock/placeholders in Tirunelveli
+    salons = salons.map(salon => {
+        if (salon.location && salon.location.coordinates[0] === 0 && salon.location.coordinates[1] === 0) {
+            return {
+                ...salon,
+                location: {
+                    ...salon.location,
+                    coordinates: [77.7567, 8.7139] // Tirunelveli [Lng, Lat]
+                }
+            };
+        }
+        return salon;
+    });
+
     salons = ltrRanking(salons); // Apply LTR logic
     res.json({
         success: true,
@@ -72,6 +87,17 @@ exports.getSalonById = async (req, res) => {
 // @desc Update Salon (Owner only)
 exports.updateSalon = async (req, res) => {
     try {
+        // Validation: Service duration cannot exceed 30 minutes
+        if (req.body.services && Array.isArray(req.body.services)) {
+            const hasInvalidDuration = req.body.services.some(service => service.duration > 30);
+            if (hasInvalidDuration) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Service duration cannot exceed 30 minutes"
+                });
+            }
+        }
+
         let salon = await Salon.findById(req.params.id);
         if (!salon) return res.status(404).json({ success: false, message: 'Salon not found' });
 
