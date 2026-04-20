@@ -36,6 +36,12 @@ const SalonOwnerSchema = new mongoose.Schema({
     },
     refreshToken: {
         type: String
+    },
+    resetPasswordOTP: {
+        type: String
+    },
+    resetPasswordExpires: {
+        type: Date
     }
 }, {
     timestamps: true

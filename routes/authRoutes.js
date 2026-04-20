@@ -11,7 +11,9 @@ const {
     logout,
     changePassword,
     updateProfile,
-    getMe
+    getMe,
+    forgotPassword,
+    resetPassword
 } = require('../controllers/authController');
 
 // Validation Middleware
@@ -60,6 +62,21 @@ router.post('/user/signup', signupValidation, registerUser);
 router.post('/user/login', loginValidation, loginUser);
 router.post('/partner/signup', ownerSignupValidation, registerOwner);
 router.post('/partner/login', loginValidation, loginOwner);
+
+// Password Reset (Public — no auth required)
+router.post('/forgot-password', [
+    check('email', 'Please include a valid email').isEmail().normalizeEmail(),
+    check('accountType', 'Account type is required').isIn(['user', 'partner']),
+    validate
+], forgotPassword);
+
+router.post('/reset-password', [
+    check('email', 'Please include a valid email').isEmail().normalizeEmail(),
+    check('otp', 'OTP is required').not().isEmpty(),
+    check('newPassword', 'Password must be at least 6 characters').isLength({ min: 6 }),
+    check('accountType', 'Account type is required').isIn(['user', 'partner']),
+    validate
+], resetPassword);
 
 // Session & Security
 router.post('/refresh', [

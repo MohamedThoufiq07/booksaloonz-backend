@@ -237,9 +237,60 @@ const sendOrderConfirmation = async (userEmail, orderDetails) => {
     }
 };
 
+/**
+ * Send password reset OTP email
+ */
+const sendPasswordResetOTP = async (userEmail, userName, otp) => {
+    if (!process.env.EMAIL_USER) {
+        console.log('📧 Email not configured — skipping password reset OTP');
+        return;
+    }
+
+    const transporter = createTransporter();
+
+    const mailOptions = {
+        from: `"BookSaloonz" <${process.env.EMAIL_USER}>`,
+        to: userEmail,
+        subject: '🔐 Password Reset OTP — BookSaloonz',
+        html: `
+            <div style="font-family: 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; background: #0f172a; color: #f8fafc; border-radius: 20px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1);">
+                <div style="background: linear-gradient(135deg, #2dd4bf, #14b8a6); padding: 40px; text-align: center;">
+                    <div style="background: rgba(0,0,0,0.15); width: 60px; height: 60px; border-radius: 20px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 20px;">
+                        <span style="font-size: 30px;">🔐</span>
+                    </div>
+                    <h1 style="margin: 0; font-size: 26px; color: #0f172a;">Password Reset</h1>
+                </div>
+                <div style="padding: 40px;">
+                    <p style="font-size: 16px;">Hi <strong>${userName}</strong>,</p>
+                    <p>We received a request to reset your password. Use the OTP below to proceed:</p>
+                    <div style="background: rgba(45, 212, 191, 0.1); border: 2px dashed #2dd4bf; border-radius: 16px; padding: 30px; margin: 30px 0; text-align: center;">
+                        <p style="margin: 0 0 10px 0; color: #94a3b8; font-size: 14px; text-transform: uppercase; letter-spacing: 2px;">Your OTP Code</p>
+                        <p style="margin: 0; font-size: 42px; font-weight: bold; color: #2dd4bf; letter-spacing: 12px;">${otp}</p>
+                    </div>
+                    <p style="color: #f87171; font-size: 14px; text-align: center;">⏰ This code expires in <strong>10 minutes</strong></p>
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.05); text-align: center;">
+                        <p style="color: #64748b; font-size: 13px;">If you didn't request this, please ignore this email. Your password will remain unchanged.</p>
+                    </div>
+                </div>
+                <div style="background: rgba(0,0,0,0.2); padding: 20px; text-align: center; font-size: 12px; color: #475569;">
+                    &copy; 2026 BookSaloonz. All rights reserved.
+                </div>
+            </div>
+        `
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        console.log(`🔐 Password reset OTP sent to ${userEmail}`);
+    } catch (err) {
+        console.error('📧 Password reset OTP email failed:', err.message);
+    }
+};
+
 module.exports = {
     sendBookingConfirmation,
     sendCancellationEmail,
     sendWelcomeEmail,
-    sendOrderConfirmation
+    sendOrderConfirmation,
+    sendPasswordResetOTP
 };

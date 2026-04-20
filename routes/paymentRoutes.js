@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const { createOrder, verifyPayment } = require('../controllers/paymentController');
-const auth = require('../middleware/authMiddleware');
+const verifyToken = require('../middleware/authMiddleware');
 
-router.use(auth);
+// All payment routes are private
+router.use(verifyToken);
 
-router.post('/order', createOrder);
+router.post('/create-order', createOrder);
 router.post('/verify', verifyPayment);
 
 module.exports = router;

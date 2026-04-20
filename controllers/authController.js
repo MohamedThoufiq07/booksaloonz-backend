@@ -2,9 +2,10 @@ const User = require('../models/User');
 const SalonOwner = require('../models/SalonOwner');
 const Salon = require('../models/Salon');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const asyncHandler = require('../utils/asyncHandler');
-const { sendWelcomeEmail } = require('../services/emailService');
+const { sendWelcomeEmail, sendPasswordResetOTP } = require('../services/emailService');
 const { generateTokens } = require('../utils/tokenUtils');
 
 // @desc    Register User
@@ -286,4 +287,135 @@ exports.getMe = asyncHandler(async (req, res) => {
             phone: user.phone
         }
     });
+});
+
+// @desc    Forgot Password — Send OTP
+// @route   POST /api/auth/forgot-password
+exports.forgotPassword = asyncHandler(async (req, res) => {
+    const { email, accountType } = req.body;
+    const emailLower = email.toLowerCase().trim();
+
+    console.log(`🔐 Forgot password request — email: ${emailLower}, accountType: ${accountType}`);
+
+    let user;
+    let userName;
+    let foundAccountType = accountType;
+
+    // Search in the requested account type first
+    if (accountType === 'partner') {
+        user = await SalonOwner.findOne({ email: emailLower });
+        if (user) userName = user.ownerName;
+    } else {
+        user = await User.findOne({ email: emailLower });
+        if (user) userName = user.name;
+    }
+
+    // If not found in requested type, search the other type as fallback
+    if (!user) {
+        if (accountType === 'partner') {
+            user = await User.findOne({ email: emailLower });
+            if (user) {
+                userName = user.name;
+                foundAccountType = 'user';
+                console.log(`🔐 Email found in User (not Partner). Proceeding with user account.`);
+            }
+        } else {
+            user = await SalonOwner.findOne({ email: emailLower });
+            if (user) {
+                userName = user.ownerName;
+                foundAccountType = 'partner';
+                console.log(`🔐 Email found in Partner (not User). Proceeding with partner account.`);
+            }
+        }
+    }
+
+    if (!user) {
+        console.log(`🔐 No account found for: ${emailLower}`);
+        return res.status(404).json({ success: false, message: 'No account found with this email address. Please check and try again.' });
+    }
+
+    console.log(`🔐 User found: ${userName} (${user.email}). Generating OTP...`);
+
+    // Generate 6-digit OTP
+    const otp = crypto.randomInt(100000, 999999).toString();
+    console.log(`🔐 OTP generated for ${emailLower}: ${otp}`);
+
+    // Hash OTP before storing
+    const salt = await bcrypt.genSalt(10);
+    user.resetPasswordOTP = await bcrypt.hash(otp, salt);
+    user.resetPasswordExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    await user.save();
+
+    console.log(`🔐 OTP saved to DB. Sending email...`);
+
+    // Send OTP email
+    try {
+        await sendPasswordResetOTP(user.email, userName, otp);
+        console.log(`🔐 OTP email sent successfully to ${user.email}`);
+    } catch (emailErr) {
+        console.error(`🔐 OTP email FAILED:`, emailErr.message);
+        return res.status(500).json({ success: false, message: 'Failed to send OTP email. Please try again later.' });
+    }
+
+    res.json({
+        success: true,
+        message: 'OTP has been sent to your email!',
+        accountType: foundAccountType // Tell frontend the actual account type found
+    });
+});
+
+// @desc    Reset Password — Verify OTP & Set New Password
+// @route   POST /api/auth/reset-password
+exports.resetPassword = asyncHandler(async (req, res) => {
+    const { email, otp, newPassword, accountType } = req.body;
+    const emailLower = email.toLowerCase().trim();
+
+    if (!newPassword || newPassword.length < 6) {
+        return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+    }
+
+    let user;
+
+    if (accountType === 'partner') {
+        user = await SalonOwner.findOne({ email: emailLower });
+    } else {
+        user = await User.findOne({ email: emailLower });
+    }
+
+    // Fallback: search other collection
+    if (!user) {
+        if (accountType === 'partner') {
+            user = await User.findOne({ email: emailLower });
+        } else {
+            user = await SalonOwner.findOne({ email: emailLower });
+        }
+    }
+
+    if (!user || !user.resetPasswordOTP || !user.resetPasswordExpires) {
+        return res.status(400).json({ success: false, message: 'Invalid or expired reset request. Please request a new OTP.' });
+    }
+
+    // Check if OTP has expired
+    if (user.resetPasswordExpires < new Date()) {
+        user.resetPasswordOTP = undefined;
+        user.resetPasswordExpires = undefined;
+        await user.save();
+        return res.status(400).json({ success: false, message: 'OTP has expired. Please request a new one.' });
+    }
+
+    // Verify OTP
+    const isOTPValid = await bcrypt.compare(otp, user.resetPasswordOTP);
+    if (!isOTPValid) {
+        return res.status(400).json({ success: false, message: 'Invalid OTP. Please check and try again.' });
+    }
+
+    // Set new password
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    user.resetPasswordOTP = undefined;
+    user.resetPasswordExpires = undefined;
+    user.refreshToken = null; // Force re-login on all devices
+    await user.save();
+
+    res.json({ success: true, message: 'Password reset successfully! You can now log in with your new password.' });
 });

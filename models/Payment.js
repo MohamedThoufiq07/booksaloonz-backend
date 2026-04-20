@@ -1,49 +1,49 @@
 const mongoose = require('mongoose');
 
 const PaymentSchema = new mongoose.Schema({
-    booking: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'booking',
-        required: true
-    },
     user: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'user',
         required: true
     },
+    razorpayOrderId: {
+        type: String,
+        required: true
+    },
+    razorpayPaymentId: {
+        type: String
+    },
+    razorpaySignature: {
+        type: String
+    },
     amount: {
         type: Number,
-        required: true,
-        min: 0
+        required: true
     },
     currency: {
         type: String,
         default: 'INR'
     },
-    orderId: {
-        type: String  // Razorpay order_id
-    },
-    transactionId: {
-        type: String  // Razorpay payment_id
-    },
-    method: {
+    type: {
         type: String,
-        enum: ['razorpay', 'cash', 'upi'],
-        default: 'razorpay'
+        enum: ['booking', 'product'],
+        required: true
+    },
+    referenceId: {
+        type: String,
+        required: true
     },
     status: {
         type: String,
         enum: ['pending', 'success', 'failed', 'refunded'],
         default: 'pending'
-    },
-    signature: {
-        type: String  // Razorpay signature for verification
     }
 }, {
     timestamps: true
 });
 
-PaymentSchema.index({ booking: 1 });
 PaymentSchema.index({ user: 1 });
+PaymentSchema.index({ razorpayOrderId: 1 });
+PaymentSchema.index({ referenceId: 1 });
 
 module.exports = mongoose.model('payment', PaymentSchema);
